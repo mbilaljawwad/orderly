@@ -1,0 +1,86 @@
+# .golangci.yml for Orderly (golangci-lint v2)
+# Run: golangci-lint run ./...      Format: golangci-lint fmt ./...
+version: "2"
+ 
+run:
+  timeout: 5m
+  tests: true            # lint _test.go files too
+ 
+linters:
+  default: standard      # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    # --- Bugs that compile fine (Week 1+) ---
+    - errorlint          # use errors.Is/As and %w, not == or type asserts on errors
+    - nilerr             # catches "return nil" right after checking err != nil
+    - gocritic           # broad bug + style checks (diagnostic/style tags below)
+    - revive             # the modern golint: naming, exported docs, receivers
+    - misspell           # typos in comments and strings
+    - unconvert          # removes pointless type conversions
+    - prealloc           # suggests make([]T, 0, n) when the size is known
+    # --- HTTP and context (Week 2+) ---
+    - bodyclose          # resp.Body must be closed, or you leak connections
+    - noctx              # HTTP requests / DB calls must carry a context.Context
+    - contextcheck       # a function with ctx should pass it on, not use Background()
+    # --- Database (Week 3+) ---
+    - sqlclosecheck      # sql.Rows / sql.Stmt must be closed
+    - rowserrcheck       # rows.Err() must be checked after the loop
+    # --- Security (Week 4+, auth arrives) ---
+    - gosec              # SQL string building, weak crypto, file perms, timeouts
+ 
+  settings:
+    errcheck:
+      check-type-assertions: true   # x := v.(T) without ok is a panic waiting to happen
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment            # struct-size micro-optimisation, too noisy to learn with
+    gocritic:
+      enabled-tags: [diagnostic, style, performance]
+      disabled-checks:
+        - hugeParam                 # noisy until you profile
+        - unnamedResult
+    revive:
+      rules:
+        - name: exported            # exported identifiers need a doc comment
+        - name: var-naming          # userId -> userID
+        - name: receiver-naming
+        - name: error-strings       # errors are lowercase, no trailing period
+        - name: error-return        # error is the last return value
+        - name: context-as-argument # ctx is the first parameter
+        - name: unused-parameter
+        - name: early-return
+        - name: indent-error-flow
+    gosec:
+      excludes:
+        - G104                      # unchecked errors: errcheck already does this
+    misspell:
+      locale: US
+ 
+  exclusions:
+    generated: lax                  # skip *.pb.go, sqlc output, mocks
+    presets:
+      - comments                    # don't demand doc comments everywhere at first
+      - std-error-handling          # allow unchecked Close() on defer etc.
+    rules:
+      - path: _test\.go
+        linters: [gosec, noctx, bodyclose, prealloc]
+    paths:
+      - gen/
+      - third_party/
+ 
+formatters:
+  enable:
+    - gofumpt            # stricter gofmt
+    - goimports          # sorts imports, groups stdlib/third-party/local
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/mbilaljawwad/orderly
+  exclusions:
+    generated: lax
+ 
+issues:
+  max-issues-per-linter: 0   # show everything, don't hide after 50
+  max-same-issues: 0
+  uniq-by-line: false        # show every linter that flags a line, not just the first
+ 
